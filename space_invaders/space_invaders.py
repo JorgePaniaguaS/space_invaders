@@ -2,6 +2,10 @@ import pygame
 import random
 import math
 import sys
+import os
+
+# Ajusta el directorio de trabajo a la ubicación del archivo .py
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 # Inicialización
 pygame.init()
@@ -14,18 +18,30 @@ FPS = 60
 # Colores
 BLANCO = (255, 255, 255)
 ROJO = (255, 0, 0)
+VERDE = (0, 255, 0)
 NEGRO = (0, 0, 0)
 AZUL = (100, 100, 255)
+AMARILLO = (255, 255, 0)
 
-# Cargar sprites desde imágenes externas
-jugador_img = pygame.image.load("player.png").convert_alpha()
-jugador_img = pygame.transform.scale(jugador_img, (48, 48))
+# Carga la imagen indicada o genera un gráfico básico si no la encuentra
+def cargar_o_crear_sprite(nombre_archivo, ancho, alto, color_respaldo, forma="rect"):
+    try:
+        img = pygame.image.load(nombre_archivo).convert_alpha()
+        return pygame.transform.scale(img, (ancho, alto))
+    except (pygame.error, FileNotFoundError):
+        surf = pygame.Surface((ancho, alto), pygame.SRCALPHA)
+        if forma == "triangulo":
+            pygame.draw.polygon(surf, color_respaldo, [(ancho // 2, 0), (0, alto), (ancho, alto)])
+        elif forma == "circulo":
+            pygame.draw.circle(surf, color_respaldo, (ancho // 2, alto // 2), min(ancho, alto) // 2)
+        else:
+            surf.fill(color_respaldo)
+        return surf
 
-bala_img = pygame.image.load("bullet.png").convert_alpha()
-bala_img = pygame.transform.scale(bala_img, (8, 16))
-
-enemigo_img = pygame.image.load("enemy.png").convert_alpha()
-enemigo_img = pygame.transform.scale(enemigo_img, (32, 32))
+# Cargar sprites (usa la imagen .png si existe, o dibuja una forma de respaldo)
+jugador_img = cargar_o_crear_sprite("player.png", 48, 48, VERDE, forma="triangulo")
+bala_img = cargar_o_crear_sprite("bullet.png", 8, 16, AMARILLO, forma="rect")
+enemigo_img = cargar_o_crear_sprite("enemy.png", 32, 32, ROJO, forma="circulo")
 
 # Fuentes
 fuente = pygame.font.Font(None, 36)
@@ -41,16 +57,21 @@ def mostrar_texto(texto, x, y, fuente, color=BLANCO):
     pantalla.blit(t, (x, y))
 
 
-def boton(texto, x, y, w, h, accion=None):
+def boton(texto, x, y, w, h, color_base=(50, 50, 200), color_hover=AZUL):
     mouse = pygame.mouse.get_pos()
     click = pygame.mouse.get_pressed()
     dentro = x < mouse[0] < x + w and y < mouse[1] < y + h
-    color = AZUL if dentro else (50, 50, 200)
+    color = color_hover if dentro else color_base
     pygame.draw.rect(pantalla, color, (x, y, w, h))
-    mostrar_texto(texto, x + 10, y + 10, fuente)
-    if dentro and click[0] and accion:
-        pygame.time.wait(200)
-        accion()
+    
+    t = fuente.render(texto, True, BLANCO)
+    t_rect = t.get_rect(center=(x + w // 2, y + h // 2))
+    pantalla.blit(t, t_rect)
+    
+    if dentro and click[0]:
+        pygame.time.wait(150)
+        return True
+    return False
 
 
 def set_dificultad(dif):
@@ -64,35 +85,35 @@ def set_dificultad(dif):
         velocidad_enemigo = 6
     elif dif == "Extremo":
         velocidad_enemigo = 8
-        
 
 
 def seleccionar_dificultad():
     global dificultad
-    seleccionando = True
-    while seleccionando:
+    dificultad = "Seleccionando"
+    while dificultad == "Seleccionando":
         pantalla.fill(NEGRO)
-        mostrar_texto("Selecciona dificultad", 200, 100, fuente_grande)
+        mostrar_texto("Selecciona dificultad", 160, 100, fuente_grande)
 
-        boton("Fácil", 300, 200, 200, 50, lambda: set_dificultad("Fácil"))
-        boton("Normal", 300, 300, 200, 50, lambda: set_dificultad("Normal"))
-        boton("Difícil", 300, 400, 200, 50, lambda: set_dificultad("Difícil"))
-        boton("Extremo", 300, 500, 200, 50, lambda: set_dificultad("Extremo"))
+        if boton("Fácil", 300, 200, 200, 50):
+            set_dificultad("Fácil")
+        if boton("Normal", 300, 270, 200, 50):
+            set_dificultad("Normal")
+        if boton("Difícil", 300, 340, 200, 50):
+            set_dificultad("Difícil")
+        if boton("Extremo", 300, 410, 200, 50):
+            set_dificultad("Extremo")
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
 
-        if dificultad != "Seleccionando":
-            seleccionando = False
-
         pygame.display.update()
         clock.tick(30)
 
 
 def juego():
-    jugador_x = 370
+    jugador_x = 376
     jugador_y = 480
     jugador_x_cambio = 0
 
@@ -120,12 +141,6 @@ def juego():
     def disparar_bala(x, y):
         pantalla.blit(bala_img, (x + 20, y))
 
-    def mostrar_game_over():
-        pantalla.fill(NEGRO)
-        mostrar_texto("GAME OVER", 250, 200, fuente_grande, ROJO)
-        mostrar_texto(f"Puntaje final: {puntaje}", 280, 280, fuente)
-        boton("Reintentar", 300, 360, 200, 50, lambda: juego())
-
     ejecutando = True
     while ejecutando:
         pantalla.fill(NEGRO)
@@ -135,6 +150,7 @@ def juego():
             if evento.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
+
             if not game_over:
                 if evento.type == pygame.KEYDOWN:
                     if evento.key == pygame.K_LEFT:
@@ -180,11 +196,24 @@ def juego():
 
             mostrar_texto(f"Puntaje: {puntaje}", 10, 10, fuente)
         else:
-            mostrar_game_over()
+            mostrar_texto("GAME OVER", 240, 200, fuente_grande, ROJO)
+            mostrar_texto(f"Puntaje final: {puntaje}", 290, 280, fuente)
+            
+            if boton("Reintentar", 300, 360, 200, 50):
+                return True
 
         pygame.display.update()
 
+    return False
 
-# Ejecutar
-seleccionar_dificultad()
-juego()
+
+def main():
+    while True:
+        seleccionar_dificultad()
+        reiniciar = juego()
+        if not reiniciar:
+            break
+
+
+if __name__ == "__main__":
+    main()
